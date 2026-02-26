@@ -139,11 +139,13 @@ class BreezartTCPClient:
             raise ConnectionError("Not connected to Breezart")
 
         _LOGGER.debug("Breezart TX: %s", request)
-        self._writer.write((request + "\n").encode())
+        # Send WITHOUT newline (like breezart-client)
+        self._writer.write(request.encode())
         await self._writer.drain()
 
+        # Read until newline or timeout
         try:
-            raw = await asyncio.wait_for(self._reader.readline(), timeout=self.timeout)
+            raw = await asyncio.wait_for(self._reader.readuntil(b'\n'), timeout=self.timeout)
         except asyncio.TimeoutError:
             raise TimeoutError(f"No response for request: {request}")
 
