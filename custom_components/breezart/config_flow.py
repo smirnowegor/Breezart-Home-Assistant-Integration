@@ -1,12 +1,17 @@
 """Config flow for Breezart integration."""
 from __future__ import annotations
 
+import logging
+
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_PASSWORD
 from homeassistant.data_entry_flow import FlowResult
 
 from .const import DEFAULT_PORT, DOMAIN
+from .coordinator import BreezartTCPClient
+
+_LOGGER = logging.getLogger(__name__)
 
 class BreezartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Breezart."""
@@ -30,16 +35,35 @@ class BreezartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._port = int(user_input[CONF_PORT])
             self._password = user_input[CONF_PASSWORD]
 
-            # TODO: Add connection test here
-            # For now, just create the entry
-            return self.async_create_entry(
-                title=f"Breezart ({self._host})",
-                data={
-                    CONF_HOST: self._host,
-                    CONF_PORT: self._port,
-                    CONF_PASSWORD: self._password,
-                },
-            )
+            # Test connection
+            try:
+                client = BreezartTCPClient(
+                    host=self._host,
+                    port=self._port,
+                    password=int(self._password),
+                )
+                await client.connect()
+                await client.get_properties()
+                await client.disconnect()
+            except TimeoutError as err:
+                _LOGGER.error("Connection timeout: %s", err)
+                errors["base"] = "cannot_connect"
+            except ConnectionError as err:
+                _LOGGER.error("Connection error: %s", err)
+                errors["base"] = "cannot_connect"
+            except Exception as err:
+                _LOGGER.exception("Unexpected error during connection test: %s", err)
+                errors["base"] = "unknown"
+            else:
+                # Connection successful, create entry
+                return self.async_create_entry(
+                    title=f"Breezart ({self._host})",
+                    data={
+                        CONF_HOST: self._host,
+                        CONF_PORT: self._port,
+                        CONF_PASSWORD: self._password,
+                    },
+                )
 
         return self.async_show_form(
             step_id="user",
