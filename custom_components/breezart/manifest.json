@@ -1,12 +1,12 @@
 {
   "domain": "breezart",
   "name": "Breezart",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "config_flow": true,
-  "documentation": "https://github.com/egorhomeriga/breezart-ha",
-  "issue_tracker": "https://github.com/egorhomeriga/breezart-ha/issues",
+  "documentation": "https://github.com/smirnowegor/Breezart-Home-Assistant-Integration",
+  "issue_tracker": "https://github.com/smirnowegor/Breezart-Home-Assistant-Integration/issues",
   "codeowners": [
-    "@egorhomeriga"
+    "@smirnowegor"
   ],
   "requirements": [],
   "iot_class": "local_polling",
