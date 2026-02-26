@@ -1,6 +1,8 @@
 """Climate platform for Breezart integration."""
 from __future__ import annotations
 
+import logging
+import time
 from typing import Any
 
 from homeassistant.components.climate import (
@@ -12,12 +14,16 @@ from homeassistant.components.climate import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MODE_MAP
 from .coordinator import BreezartDataCoordinator
+
+_LOGGER = logging.getLogger(__name__)
+_OPTIMISTIC_HOLD_SECONDS = 6
 
 
 class BreezartClimate(CoordinatorEntity[BreezartDataCoordinator], ClimateEntity):
@@ -46,12 +52,18 @@ class BreezartClimate(CoordinatorEntity[BreezartDataCoordinator], ClimateEntity)
         self._optimistic_target_temp: float | None = None
         self._optimistic_fan_mode: str | None = None
         self._optimistic_hvac_mode: HVACMode | None = None
+        self._optimistic_set_time: float = 0.0
 
     def _handle_coordinator_update(self) -> None:
-        """Clear optimistic state when real data arrives from device."""
-        self._optimistic_target_temp = None
-        self._optimistic_fan_mode = None
-        self._optimistic_hvac_mode = None
+        """Clear optimistic state only after hold period expires.
+        
+        Keeps optimistic value visible for _OPTIMISTIC_HOLD_SECONDS after
+        a command is sent, giving the device time to apply and confirm.
+        """
+        if time.monotonic() - self._optimistic_set_time > _OPTIMISTIC_HOLD_SECONDS:
+            self._optimistic_target_temp = None
+            self._optimistic_fan_mode = None
+            self._optimistic_hvac_mode = None
         super()._handle_coordinator_update()
 
     @property
@@ -142,31 +154,44 @@ class BreezartClimate(CoordinatorEntity[BreezartDataCoordinator], ClimateEntity)
         """Set new target temperature."""
         if (temperature := kwargs.get(ATTR_TEMPERATURE)) is None:
             return
-        # Optimistic: update UI immediately, device confirms on next poll
+        # Optimistic: update UI immediately, device confirms within hold period
         self._optimistic_target_temp = float(temperature)
+        self._optimistic_set_time = time.monotonic()
         self.async_write_ha_state()
-        await self.coordinator.client.set_temperature(int(temperature))
+        try:
+            await self.coordinator.client.set_temperature(int(temperature))
+            _LOGGER.debug("Set temperature to %d°C", int(temperature))
+        except Exception as err:
+            _LOGGER.error("Failed to set temperature: %s", err)
+            self._optimistic_target_temp = None
+            self.async_write_ha_state()
+            return
         await self.coordinator.async_request_refresh()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new HVAC mode."""
         self._optimistic_hvac_mode = hvac_mode
+        self._optimistic_set_time = time.monotonic()
         self.async_write_ha_state()
-
-        if hvac_mode == HVACMode.OFF:
-            await self.coordinator.client.set_power(False)
-        else:
-            if not self.coordinator.data.get("power", False):
-                await self.coordinator.client.set_power(True)
-            if hvac_mode == HVACMode.HEAT:
-                await self.coordinator.client.set_mode(0)
-            elif hvac_mode == HVACMode.COOL:
-                await self.coordinator.client.set_mode(1)
-            elif hvac_mode == HVACMode.AUTO:
-                await self.coordinator.client.set_mode(2)
-            elif hvac_mode == HVACMode.FAN_ONLY:
-                await self.coordinator.client.set_mode(3)
-
+        try:
+            if hvac_mode == HVACMode.OFF:
+                await self.coordinator.client.set_power(False)
+            else:
+                if not self.coordinator.data.get("power", False):
+                    await self.coordinator.client.set_power(True)
+                if hvac_mode == HVACMode.HEAT:
+                    await self.coordinator.client.set_mode(0)
+                elif hvac_mode == HVACMode.COOL:
+                    await self.coordinator.client.set_mode(1)
+                elif hvac_mode == HVACMode.AUTO:
+                    await self.coordinator.client.set_mode(2)
+                elif hvac_mode == HVACMode.FAN_ONLY:
+                    await self.coordinator.client.set_mode(3)
+        except Exception as err:
+            _LOGGER.error("Failed to set HVAC mode: %s", err)
+            self._optimistic_hvac_mode = None
+            self.async_write_ha_state()
+            return
         await self.coordinator.async_request_refresh()
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
@@ -175,24 +200,46 @@ class BreezartClimate(CoordinatorEntity[BreezartDataCoordinator], ClimateEntity)
             speed = int(fan_mode)
         except ValueError:
             return
-        # Optimistic: update UI immediately, device confirms on next poll
+        # Optimistic: update UI immediately, device confirms within hold period
         self._optimistic_fan_mode = fan_mode
+        self._optimistic_set_time = time.monotonic()
         self.async_write_ha_state()
-        await self.coordinator.client.set_fan_speed(speed)
+        try:
+            await self.coordinator.client.set_fan_speed(speed)
+            _LOGGER.debug("Set fan speed to %d", speed)
+        except Exception as err:
+            _LOGGER.error("Failed to set fan speed: %s", err)
+            self._optimistic_fan_mode = None
+            self.async_write_ha_state()
+            return
         await self.coordinator.async_request_refresh()
 
     async def async_turn_on(self) -> None:
         """Turn on."""
         self._optimistic_hvac_mode = HVACMode.HEAT
+        self._optimistic_set_time = time.monotonic()
         self.async_write_ha_state()
-        await self.coordinator.client.set_power(True)
+        try:
+            await self.coordinator.client.set_power(True)
+        except Exception as err:
+            _LOGGER.error("Failed to turn on: %s", err)
+            self._optimistic_hvac_mode = None
+            self.async_write_ha_state()
+            return
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self) -> None:
         """Turn off."""
         self._optimistic_hvac_mode = HVACMode.OFF
+        self._optimistic_set_time = time.monotonic()
         self.async_write_ha_state()
-        await self.coordinator.client.set_power(False)
+        try:
+            await self.coordinator.client.set_power(False)
+        except Exception as err:
+            _LOGGER.error("Failed to turn off: %s", err)
+            self._optimistic_hvac_mode = None
+            self.async_write_ha_state()
+            return
         await self.coordinator.async_request_refresh()
 
     @property
