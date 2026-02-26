@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Breezart",
+        "description": "Настройка подключения к контроллеру Breezart",
+        "data": {
+          "host": "Хост",
+          "port": "Порт",
+          "password": "Пароль"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Не удалось подключиться",
+      "unknown": "Неожиданная ошибка"
+    },
+    "abort": {
+      "already_configured": "Устройство уже настроено"
+    }
+  }
+}

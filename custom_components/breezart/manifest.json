@@ -1,0 +1,16 @@
+{
+  "domain": "breezart",
+  "name": "Breezart",
+  "version": "0.1.0",
+  "config_flow": true,
+  "documentation": "https://github.com/egorhomeriga/breezart-ha",
+  "issue_tracker": "https://github.com/egorhomeriga/breezart-ha/issues",
+  "codeowners": [
+    "@egorhomeriga"
+  ],
+  "requirements": [],
+  "iot_class": "local_polling",
+  "loggers": [
+    "custom_components.breezart"
+  ]
+}
