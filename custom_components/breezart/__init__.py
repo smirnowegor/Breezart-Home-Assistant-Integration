@@ -1,9 +1,8 @@
 """Custom integration for Breezart 550 Aqua ventilation system."""
 from __future__ import annotations
 
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
@@ -11,6 +10,7 @@ from .coordinator import BreezartDataCoordinator, BreezartTCPClient
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
+    Platform.BINARY_SENSOR,
     Platform.NUMBER,
     Platform.SWITCH,
 ]
