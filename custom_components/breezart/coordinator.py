@@ -145,7 +145,7 @@ class BreezartTCPClient:
 
         # Breezart doesn't send \n, so read available data with small delay
         # Wait a bit for data to arrive
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.05)
         
         response = ""
         try:
@@ -336,7 +336,7 @@ class BreezartDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
+            update_interval=timedelta(seconds=10),
         )
         self.client = client
         self._properties_loaded = False

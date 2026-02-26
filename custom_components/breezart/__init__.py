@@ -9,6 +9,7 @@ from .const import DOMAIN
 from .coordinator import BreezartDataCoordinator, BreezartTCPClient
 
 PLATFORMS: list[Platform] = [
+    Platform.CLIMATE,
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
     Platform.NUMBER,
