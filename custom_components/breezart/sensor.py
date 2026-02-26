@@ -64,7 +64,7 @@ class BreezartSensor(CoordinatorEntity[BreezartDataCoordinator], SensorEntity):
 
 
 class BreezartTextSensor(BreezartSensor):
-    """Sensor whose value is mapped through a dict."""
+    """Sensor that maps numeric values to text using a dictionary."""
 
     def __init__(
         self,
@@ -72,29 +72,71 @@ class BreezartTextSensor(BreezartSensor):
         unique_suffix: str,
         name: str,
         key: str,
-        value_map: dict,
+        value_map: dict[int, str],
         entity_category: EntityCategory | None = None,
     ) -> None:
-        """Initialize."""
+        """Initialize the text sensor."""
         super().__init__(
-            coordinator,
-            unique_suffix,
-            name,
-            key,
-            entity_category=entity_category,
-            state_class=None,
+            coordinator, unique_suffix, name, key,
+            entity_category=entity_category, state_class=None,
         )
         self._value_map = value_map
 
     @property
     def native_value(self) -> str | None:
-        """Return mapped string value."""
+        """Return the mapped text value."""
         if not self.coordinator.data:
             return None
-        raw = self.coordinator.data.get(self._key)
-        if raw is None:
+        raw_value = self.coordinator.data.get(self._key)
+        if raw_value is None:
             return None
-        return self._value_map.get(raw, f"Unknown ({raw})")
+        return self._value_map.get(raw_value, f"Неизвестно ({raw_value})")
+
+
+class BreezartFilterSensor(BreezartSensor):
+    """Sensor for filter pollution status with text representation."""
+
+    def __init__(
+        self,
+        coordinator: BreezartDataCoordinator,
+        unique_suffix: str,
+        name: str,
+        key: str,
+    ) -> None:
+        """Initialize the filter sensor."""
+        super().__init__(
+            coordinator, unique_suffix, name, key,
+            unit=PERCENTAGE, entity_category=EntityCategory.DIAGNOSTIC,
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the numeric pollution value."""
+        if not self.coordinator.data:
+            return None
+        return self.coordinator.data.get(self._key)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str] | None:
+        """Return additional state attributes with text status."""
+        if not self.coordinator.data:
+            return None
+        
+        pollution = self.coordinator.data.get(self._key)
+        if pollution is None:
+            return {"status": "Нет данных"}
+        
+        # Map pollution percentage to status
+        if pollution < 30:
+            status = "Отличное"
+        elif pollution < 60:
+            status = "Хорошее"
+        elif pollution < 85:
+            status = "Требуется замена"
+        else:
+            status = "Забит"
+        
+        return {"status": status}
 
 
 async def async_setup_entry(
@@ -204,6 +246,33 @@ async def async_setup_entry(
             "protocol_ver", state_class=None,
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
+        # --- Дополнительная влажность ---
+        BreezartSensor(
+            coordinator, "humidity_supply", "Влажность на притоке",
+            "humidity_supply", SensorDeviceClass.HUMIDITY, PERCENTAGE,
+        ),
+        BreezartSensor(
+            coordinator, "humidity_room", "Влажность в помещении",
+            "humidity_room", SensorDeviceClass.HUMIDITY, PERCENTAGE,
+        ),
+        BreezartSensor(
+            coordinator, "humidity_outdoor", "Влажность уличного воздуха",
+            "humidity_outdoor", SensorDeviceClass.HUMIDITY, PERCENTAGE,
+        ),
+        # --- Качество воздуха ---
+        BreezartSensor(
+            coordinator, "co2", "CO₂",
+            "co2", SensorDeviceClass.CO2, "ppm",
+        ),
+        BreezartSensor(
+            coordinator, "voc", "VOC (загрязнённость воздуха)",
+            "voc", unit="ppb",
+        ),
+        # --- Состояние фильтров ---
+        BreezartFilterSensor(coordinator, "filter1_pollution", "Фильтр 1", "filter1_pollution"),
+        BreezartFilterSensor(coordinator, "filter2_pollution", "Фильтр 2", "filter2_pollution"),
+        BreezartFilterSensor(coordinator, "filter3_pollution", "Фильтр 3", "filter3_pollution"),
+        BreezartFilterSensor(coordinator, "filter4_pollution", "Фильтр 4", "filter4_pollution"),
     ]
 
     async_add_entities(entities)

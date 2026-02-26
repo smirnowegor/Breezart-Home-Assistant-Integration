@@ -273,6 +273,8 @@ class BreezartTCPClient:
         if not parts or parts[0] != RESP_SENSORS:
             raise ValueError(f"Unexpected sensors response: {parts}")
 
+        _LOGGER.debug("VSens parts count: %d, parts: %s", len(parts), parts)
+
         def _parse_temp_sensor(val: str) -> float | None:
             if val == "fb07":
                 return None
@@ -283,18 +285,39 @@ class BreezartTCPClient:
                 return None
             return float(_hex_to_dec(val))
 
+        # Parse all available sensor data
         t_inf = _parse_temp_sensor(parts[1]) if len(parts) > 1 else None
+        h_inf = _parse_sensor(parts[2]) if len(parts) > 2 else None
         t_room = _parse_sensor(parts[3]) if len(parts) > 3 else None
+        h_room = _parse_sensor(parts[4]) if len(parts) > 4 else None
         t_out = _parse_temp_sensor(parts[5]) if len(parts) > 5 else None
+        h_out = _parse_sensor(parts[6]) if len(parts) > 6 else None
         t_hf = _parse_sensor(parts[7]) if len(parts) > 7 else None
         pwr = _parse_sensor(parts[8]) if len(parts) > 8 else None
+        
+        # Additional sensors (if available in response)
+        co2 = _parse_sensor(parts[9]) if len(parts) > 9 else None
+        voc = _parse_sensor(parts[10]) if len(parts) > 10 else None
+        filter1 = _parse_sensor(parts[11]) if len(parts) > 11 else None
+        filter2 = _parse_sensor(parts[12]) if len(parts) > 12 else None
+        filter3 = _parse_sensor(parts[13]) if len(parts) > 13 else None
+        filter4 = _parse_sensor(parts[14]) if len(parts) > 14 else None
 
         return {
             "temp_supply": t_inf,
+            "humidity_supply": h_inf,
             "temp_room": t_room,
+            "humidity_room": h_room,
             "temp_outdoor": t_out,
+            "humidity_outdoor": h_out,
             "temp_water": t_hf,
             "power_consumption": pwr,
+            "co2": co2,
+            "voc": voc,
+            "filter1_pollution": filter1,
+            "filter2_pollution": filter2,
+            "filter3_pollution": filter3,
+            "filter4_pollution": filter4,
         }
 
     async def set_power(self, on: bool) -> None:
