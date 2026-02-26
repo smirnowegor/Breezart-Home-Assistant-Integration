@@ -56,9 +56,16 @@ class BreezartClimate(CoordinatorEntity[BreezartDataCoordinator], ClimateEntity)
 
     @property
     def current_temperature(self) -> float | None:
-        """Return the current temperature."""
+        """Return the current temperature.
+        
+        Prefer temp_supply (приточный воздух from VSens).
+        Fall back to temperature (подача from VSt07) if not available.
+        """
         if not self.coordinator.data:
             return None
+        temp_supply = self.coordinator.data.get("temp_supply")
+        if temp_supply is not None:
+            return temp_supply
         return self.coordinator.data.get("temperature")
 
     @property
