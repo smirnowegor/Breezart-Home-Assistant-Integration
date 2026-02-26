@@ -353,19 +353,28 @@ class BreezartTCPClient:
 class BreezartDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator that polls Breezart for state and sensor data."""
 
+    SENSORS_UPDATE_INTERVAL = 30  # Poll sensors less frequently than state
+
     def __init__(self, hass: HomeAssistant, client: BreezartTCPClient) -> None:
         """Initialize the coordinator."""
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=5),
+            update_interval=timedelta(seconds=3),
         )
         self.client = client
         self._properties_loaded = False
+        self._cached_sensors: dict[str, Any] = {}
+        self._sensors_update_counter = 0
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch latest data from Breezart."""
+        """Fetch latest data from Breezart.
+        
+        State (VSt07) is polled every cycle (3s) for fast response to
+        panel changes. Sensors (VSens) are polled every 30s since they
+        change slowly.
+        """
         try:
             if not self.client._writer:
                 await self.client.connect()
@@ -374,10 +383,18 @@ class BreezartDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 await self.client.get_properties()
                 self._properties_loaded = True
 
+            # Always fetch state — this contains temperature, speed, mode
             state = await self.client.get_state()
-            sensors = await self.client.get_sensors()
 
-            data = {**state, **sensors}
+            # Fetch sensors only every SENSORS_UPDATE_INTERVAL seconds
+            self._sensors_update_counter += 1
+            cycles_per_sensor_update = self.SENSORS_UPDATE_INTERVAL // 3
+            if self._sensors_update_counter >= cycles_per_sensor_update or not self._cached_sensors:
+                self._cached_sensors = await self.client.get_sensors()
+                self._sensors_update_counter = 0
+                _LOGGER.debug("Breezart sensors refreshed")
+
+            data = {**state, **self._cached_sensors}
 
             data["temp_min"] = self.client.temp_min
             data["temp_max"] = self.client.temp_max
@@ -388,11 +405,13 @@ class BreezartDataCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             data["firmware_ver"] = self.client.firmware_ver
             data["protocol_ver"] = self.client.protocol_ver
 
-            _LOGGER.debug("Breezart update: %s", data)
+            _LOGGER.debug("Breezart state update: power=%s temp=%s speed=%s",
+                          data.get("power"), data.get("temperature_target"), data.get("speed_target"))
             return data
 
         except (ConnectionError, OSError, TimeoutError) as err:
             self._properties_loaded = False
+            self._cached_sensors = {}
             await self.client.disconnect()
             raise UpdateFailed(f"Connection error: {err}") from err
         except Exception as err:

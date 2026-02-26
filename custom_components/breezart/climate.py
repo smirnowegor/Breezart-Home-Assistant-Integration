@@ -33,8 +33,6 @@ class BreezartClimate(CoordinatorEntity[BreezartDataCoordinator], ClimateEntity)
         | ClimateEntityFeature.TURN_OFF
     )
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.FAN_ONLY, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO]
-    
-    # Fan modes based on speed (1-8)
     _attr_fan_modes = ["1", "2", "3", "4", "5", "6", "7", "8"]
 
     def __init__(self, coordinator: BreezartDataCoordinator) -> None:
@@ -44,6 +42,17 @@ class BreezartClimate(CoordinatorEntity[BreezartDataCoordinator], ClimateEntity)
         self._attr_min_temp = float(coordinator.client.temp_min)
         self._attr_max_temp = float(coordinator.client.temp_max)
         self._attr_target_temperature_step = 1.0
+        # Optimistic state — applied immediately on command, confirmed by next poll
+        self._optimistic_target_temp: float | None = None
+        self._optimistic_fan_mode: str | None = None
+        self._optimistic_hvac_mode: HVACMode | None = None
+
+    def _handle_coordinator_update(self) -> None:
+        """Clear optimistic state when real data arrives from device."""
+        self._optimistic_target_temp = None
+        self._optimistic_fan_mode = None
+        self._optimistic_hvac_mode = None
+        super()._handle_coordinator_update()
 
     @property
     def current_temperature(self) -> float | None:
@@ -55,6 +64,8 @@ class BreezartClimate(CoordinatorEntity[BreezartDataCoordinator], ClimateEntity)
     @property
     def target_temperature(self) -> float | None:
         """Return the target temperature."""
+        if self._optimistic_target_temp is not None:
+            return self._optimistic_target_temp
         if not self.coordinator.data:
             return None
         return self.coordinator.data.get("temperature_target")
@@ -62,17 +73,18 @@ class BreezartClimate(CoordinatorEntity[BreezartDataCoordinator], ClimateEntity)
     @property
     def hvac_mode(self) -> HVACMode:
         """Return current HVAC mode."""
+        if self._optimistic_hvac_mode is not None:
+            return self._optimistic_hvac_mode
         if not self.coordinator.data:
             return HVACMode.OFF
-        
+
         power = self.coordinator.data.get("power", False)
         if not power:
             return HVACMode.OFF
-        
-        # Map Breezart mode to HVAC mode
+
         mode = self.coordinator.data.get("mode", 0)
         mode_name = MODE_MAP.get(mode, "").lower()
-        
+
         if "обогрев" in mode_name or "нагрев" in mode_name:
             return HVACMode.HEAT
         elif "охлаждение" in mode_name:
@@ -87,19 +99,17 @@ class BreezartClimate(CoordinatorEntity[BreezartDataCoordinator], ClimateEntity)
         """Return current HVAC action."""
         if not self.coordinator.data:
             return None
-        
+
         power = self.coordinator.data.get("power", False)
         if not power:
             return HVACAction.OFF
-        
-        # Check unit state
+
         unit_state = self.coordinator.data.get("unit_state", 0)
-        if unit_state == 0:  # Off
+        if unit_state == 0:
             return HVACAction.OFF
-        elif unit_state == 1:  # On
+        elif unit_state == 1:
             mode = self.coordinator.data.get("mode", 0)
             mode_name = MODE_MAP.get(mode, "").lower()
-            
             if "обогрев" in mode_name or "нагрев" in mode_name:
                 return HVACAction.HEATING
             elif "охлаждение" in mode_name:
@@ -112,6 +122,8 @@ class BreezartClimate(CoordinatorEntity[BreezartDataCoordinator], ClimateEntity)
     @property
     def fan_mode(self) -> str | None:
         """Return current fan mode (speed)."""
+        if self._optimistic_fan_mode is not None:
+            return self._optimistic_fan_mode
         if not self.coordinator.data:
             return None
         speed = self.coordinator.data.get("speed_target")
@@ -123,21 +135,22 @@ class BreezartClimate(CoordinatorEntity[BreezartDataCoordinator], ClimateEntity)
         """Set new target temperature."""
         if (temperature := kwargs.get(ATTR_TEMPERATURE)) is None:
             return
-        
+        # Optimistic: update UI immediately, device confirms on next poll
+        self._optimistic_target_temp = float(temperature)
+        self.async_write_ha_state()
         await self.coordinator.client.set_temperature(int(temperature))
         await self.coordinator.async_request_refresh()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new HVAC mode."""
+        self._optimistic_hvac_mode = hvac_mode
+        self.async_write_ha_state()
+
         if hvac_mode == HVACMode.OFF:
             await self.coordinator.client.set_power(False)
         else:
-            # Turn on if off
             if not self.coordinator.data.get("power", False):
                 await self.coordinator.client.set_power(True)
-            
-            # Map HVAC mode to Breezart mode
-            # Mode values: 0=Heat, 1=Cool, 2=Auto, 3=Vent
             if hvac_mode == HVACMode.HEAT:
                 await self.coordinator.client.set_mode(0)
             elif hvac_mode == HVACMode.COOL:
@@ -146,25 +159,32 @@ class BreezartClimate(CoordinatorEntity[BreezartDataCoordinator], ClimateEntity)
                 await self.coordinator.client.set_mode(2)
             elif hvac_mode == HVACMode.FAN_ONLY:
                 await self.coordinator.client.set_mode(3)
-        
+
         await self.coordinator.async_request_refresh()
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         """Set new fan mode (speed)."""
         try:
             speed = int(fan_mode)
-            await self.coordinator.client.set_fan_speed(speed)
-            await self.coordinator.async_request_refresh()
         except ValueError:
-            pass
+            return
+        # Optimistic: update UI immediately, device confirms on next poll
+        self._optimistic_fan_mode = fan_mode
+        self.async_write_ha_state()
+        await self.coordinator.client.set_fan_speed(speed)
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_on(self) -> None:
         """Turn on."""
+        self._optimistic_hvac_mode = HVACMode.HEAT
+        self.async_write_ha_state()
         await self.coordinator.client.set_power(True)
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self) -> None:
         """Turn off."""
+        self._optimistic_hvac_mode = HVACMode.OFF
+        self.async_write_ha_state()
         await self.coordinator.client.set_power(False)
         await self.coordinator.async_request_refresh()
 
