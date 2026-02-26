@@ -33,6 +33,7 @@ class BreezartSensor(CoordinatorEntity[BreezartDataCoordinator], SensorEntity):
         unit: str | None = None,
         entity_category: EntityCategory | None = None,
         state_class: SensorStateClass | None = SensorStateClass.MEASUREMENT,
+        enabled_default: bool = True,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
@@ -42,6 +43,7 @@ class BreezartSensor(CoordinatorEntity[BreezartDataCoordinator], SensorEntity):
         self._attr_native_unit_of_measurement = unit
         self._attr_entity_category = entity_category
         self._attr_state_class = state_class
+        self._attr_entity_registry_enabled_default = enabled_default
         self._key = key
 
     @property
@@ -74,11 +76,13 @@ class BreezartTextSensor(BreezartSensor):
         key: str,
         value_map: dict[int, str],
         entity_category: EntityCategory | None = None,
+        enabled_default: bool = True,
     ) -> None:
         """Initialize the text sensor."""
         super().__init__(
             coordinator, unique_suffix, name, key,
             entity_category=entity_category, state_class=None,
+            enabled_default=enabled_default,
         )
         self._value_map = value_map
 
@@ -107,6 +111,7 @@ class BreezartFilterSensor(BreezartSensor):
         super().__init__(
             coordinator, unique_suffix, name, key,
             unit=PERCENTAGE, entity_category=EntityCategory.DIAGNOSTIC,
+            enabled_default=False,
         )
 
     @property
@@ -160,14 +165,17 @@ async def async_setup_entry(
         BreezartSensor(
             coordinator, "temp_room", "Температура в помещении",
             "temp_room", SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS,
+            enabled_default=False,
         ),
         BreezartSensor(
             coordinator, "temp_outdoor", "Температура на улице",
             "temp_outdoor", SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS,
+            enabled_default=False,
         ),
         BreezartSensor(
             coordinator, "temp_water", "Температура теплоносителя",
             "temp_water", SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS,
+            enabled_default=False,
         ),
         BreezartSensor(
             coordinator, "temperature_target", "Заданная температура",
@@ -187,11 +195,13 @@ async def async_setup_entry(
         BreezartSensor(
             coordinator, "speed_fact", "Фактическая скорость",
             "speed_fact", unit=PERCENTAGE,
+            enabled_default=False,
         ),
         # --- Мощность ---
         BreezartSensor(
             coordinator, "power_consumption", "Потребляемая мощность",
             "power_consumption", SensorDeviceClass.POWER, UnitOfPower.WATT,
+            enabled_default=False,
         ),
         # --- Фильтр ---
         BreezartSensor(
@@ -250,23 +260,28 @@ async def async_setup_entry(
         BreezartSensor(
             coordinator, "humidity_supply", "Влажность на притоке",
             "humidity_supply", SensorDeviceClass.HUMIDITY, PERCENTAGE,
+            enabled_default=False,
         ),
         BreezartSensor(
             coordinator, "humidity_room", "Влажность в помещении",
             "humidity_room", SensorDeviceClass.HUMIDITY, PERCENTAGE,
+            enabled_default=False,
         ),
         BreezartSensor(
             coordinator, "humidity_outdoor", "Влажность уличного воздуха",
             "humidity_outdoor", SensorDeviceClass.HUMIDITY, PERCENTAGE,
+            enabled_default=False,
         ),
         # --- Качество воздуха ---
         BreezartSensor(
             coordinator, "co2", "CO₂",
             "co2", SensorDeviceClass.CO2, "ppm",
+            enabled_default=False,
         ),
         BreezartSensor(
             coordinator, "voc", "VOC (загрязнённость воздуха)",
             "voc", unit="ppb",
+            enabled_default=False,
         ),
         # --- Состояние фильтров ---
         BreezartFilterSensor(coordinator, "filter1_pollution", "Фильтр 1", "filter1_pollution"),
