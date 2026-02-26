@@ -155,11 +155,11 @@ async def async_setup_entry(
     entities: list[SensorEntity] = [
         # --- Температуры ---
         BreezartSensor(
-            coordinator, "temperature", "Температура подачи",
+            coordinator, "temperature", "Температура (точка регулирования)",
             "temperature", SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS,
         ),
         BreezartSensor(
-            coordinator, "temp_supply", "Температура приточного воздуха",
+            coordinator, "temp_supply", "Температура подачи (выход установки)",
             "temp_supply", SensorDeviceClass.TEMPERATURE, UnitOfTemperature.CELSIUS,
         ),
         BreezartSensor(
