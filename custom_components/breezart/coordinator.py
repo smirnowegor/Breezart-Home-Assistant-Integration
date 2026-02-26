@@ -143,23 +143,20 @@ class BreezartTCPClient:
         self._writer.write(request.encode())
         await self._writer.drain()
 
-        # Read response with timeout (breezart may not send \n)
+        # Breezart doesn't send \n, so read available data with small delay
+        # Wait a bit for data to arrive
+        await asyncio.sleep(0.1)
+        
         response = ""
         try:
-            # Try to read until newline first
-            try:
-                raw = await asyncio.wait_for(
-                    self._reader.readuntil(b'\n'), 
-                    timeout=self.timeout
-                )
-                response = raw.decode().strip()
-            except asyncio.LimitOverrunError:
-                # Response too long without newline, read what's available
-                raw = await asyncio.wait_for(
-                    self._reader.read(4096),
-                    timeout=self.timeout
-                )
-                response = raw.decode().strip()
+            # Read whatever is available (up to 4KB)
+            raw = await asyncio.wait_for(
+                self._reader.read(4096),
+                timeout=self.timeout
+            )
+            if not raw:
+                raise TimeoutError(f"No response for request: {request}")
+            response = raw.decode().strip()
         except asyncio.TimeoutError:
             raise TimeoutError(f"No response for request: {request}")
         except Exception as e:
