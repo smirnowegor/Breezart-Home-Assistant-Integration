@@ -34,8 +34,8 @@ class BreezartClimate(CoordinatorEntity[BreezartDataCoordinator], ClimateEntity)
     )
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.FAN_ONLY, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO]
     
-    # Fan modes based on speed (1-10)
-    _attr_fan_modes = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+    # Fan modes based on speed (1-8)
+    _attr_fan_modes = ["1", "2", "3", "4", "5", "6", "7", "8"]
 
     def __init__(self, coordinator: BreezartDataCoordinator) -> None:
         """Initialize the climate entity."""
